@@ -67,7 +67,7 @@ xdr_rpc_request_load_session (XDR *xdrs, rpc_request_load_session *objp)
 	register int32_t *buf;
 
 	 if (!xdr_array (xdrs, (char **)&objp->session_id.session_id_val, (u_int *) &objp->session_id.session_id_len, ~0,
-		sizeof (uint16_t), (xdrproc_t) xdr_uint16_t))
+		sizeof (char), (xdrproc_t) xdr_char))
 		 return FALSE;
 	return TRUE;
 }
@@ -78,7 +78,7 @@ xdr_rpc_request_session_update (XDR *xdrs, rpc_request_session_update *objp)
 	register int32_t *buf;
 
 	 if (!xdr_array (xdrs, (char **)&objp->session_id.session_id_val, (u_int *) &objp->session_id.session_id_len, ~0,
-		sizeof (uint16_t), (xdrproc_t) xdr_uint16_t))
+		sizeof (char), (xdrproc_t) xdr_char))
 		 return FALSE;
 	 if (!xdr_array (xdrs, (char **)&objp->key.key_val, (u_int *) &objp->key.key_len, ~0,
 		sizeof (uint8_t), (xdrproc_t) xdr_uint8_t))
@@ -92,7 +92,7 @@ xdr_rpc_request_session_release (XDR *xdrs, rpc_request_session_release *objp)
 	register int32_t *buf;
 
 	 if (!xdr_array (xdrs, (char **)&objp->session_id.session_id_val, (u_int *) &objp->session_id.session_id_len, ~0,
-		sizeof (uint16_t), (xdrproc_t) xdr_uint16_t))
+		sizeof (char), (xdrproc_t) xdr_char))
 		 return FALSE;
 	return TRUE;
 }
@@ -103,7 +103,7 @@ xdr_rpc_request_mediaengine_data (XDR *xdrs, rpc_request_mediaengine_data *objp)
 	register int32_t *buf;
 
 	 if (!xdr_array (xdrs, (char **)&objp->session_id.session_id_val, (u_int *) &objp->session_id.session_id_len, ~0,
-		sizeof (uint16_t), (xdrproc_t) xdr_uint16_t))
+		sizeof (char), (xdrproc_t) xdr_char))
 		 return FALSE;
 	 if (!xdr_array (xdrs, (char **)&objp->auth_data.auth_data_val, (u_int *) &objp->auth_data.auth_data_len, ~0,
 		sizeof (uint8_t), (xdrproc_t) xdr_uint8_t))
@@ -133,7 +133,8 @@ xdr_rpc_response_create_session (XDR *xdrs, rpc_response_create_session *objp)
 	 if (!xdr_int (xdrs, &objp->platform_val))
 		 return FALSE;
 	 if (!xdr_array (xdrs, (char **)&objp->session_id.session_id_val, (u_int *) &objp->session_id.session_id_len, ~0,
-		sizeof (uint16_t), (xdrproc_t) xdr_uint16_t))
+		sizeof (char), (xdrproc_t) xdr_char)) {
 		 return FALSE;
+   }
 	return TRUE;
 }

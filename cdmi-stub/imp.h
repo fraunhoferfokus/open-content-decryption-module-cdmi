@@ -24,7 +24,7 @@ namespace CDMi
 class CMediaKeySession : public IMediaKeySession
 {
 public:
-    CMediaKeySession(const wchar_t *sessionId);
+    CMediaKeySession(const char *sessionId);
 
     virtual ~CMediaKeySession(void);
 
@@ -39,9 +39,9 @@ public:
 
     virtual void Close(void);
 
-    virtual const wchar_t *GetSessionId(void) const;
+    virtual const char *GetSessionId(void) const;
 
-    virtual const wchar_t *GetKeySystem(void) const;
+    virtual const char *GetKeySystem(void) const;
 
     CDMi_RESULT Init(
         const uint8_t *f_pbInitData,
@@ -54,12 +54,21 @@ public:
     CDMi_RESULT Decrypt(
         const uint8_t *f_pbSessionKey,
         uint32_t f_cbSessionKey,
+        const uint32_t *f_pdwSubSampleMapping,
+        uint32_t f_cdwSubSampleMapping,
         const uint8_t *f_pbIV,
         uint32_t f_cbIV,
-        uint8_t *f_pbData,
+        const uint8_t *f_pbData,
         uint32_t f_cbData,
-        const uint32_t *f_pdwSubSampleMapping,
-        uint32_t f_cdwSubSampleMapping);
+        uint32_t *f_pcbOpaqueClearContent,
+        uint8_t **f_ppbOpaqueClearContent);
+
+    virtual CDMi_RESULT ReleaseClearContent(
+        const uint8_t *f_pbSessionKey,
+        uint32_t f_cbSessionKey,
+        const uint32_t  f_cbClearContentOpaque,
+        uint8_t  *f_pbClearContentOpaque );
+
 private:
     static void* _CallRunThread(
         void *arg);
@@ -67,8 +76,8 @@ private:
     static void* _CallRunThread2(
         void *arg);
 
-private:    
-    const wchar_t *m_sessionId;
+private:
+    const char *m_sessionId;
     IMediaKeySessionCallback *m_piCallback;
 };
 
@@ -80,14 +89,14 @@ public:
     virtual ~CMediaKeys(void);
 
     virtual bool IsTypeSupported(
-        const wchar_t *f_pwszMimeType, 
-        const wchar_t *f_pwszKeySystem) const;
+        const char *f_pwszMimeType,
+        const char *f_pwszKeySystem) const;
 
     virtual CDMi_RESULT CreateMediaKeySession(
         const char *f_pwszMimeType,
-        const uint8_t *f_pbInitData, 
+        const uint8_t *f_pbInitData,
         uint32_t f_cbInitData,
-        const uint8_t *f_pbCDMData, 
+        const uint8_t *f_pbCDMData,
         uint32_t f_cbCDMData,
         IMediaKeySession **f_ppiMediaKeySession);
 
@@ -95,7 +104,7 @@ public:
         IMediaKeySession *f_piMediaKeySession);
 
 private:
-    static const wchar_t * CreateSessionId();
+    static const char * CreateSessionId();
 
 private:
     static uint32_t s_sessionCnt;
@@ -109,12 +118,18 @@ public:
     virtual ~CMediaEngineSession(void);
 
     virtual CDMi_RESULT Decrypt(
-        const uint8_t *f_pbIV,
-        uint32_t f_cbIV,
-        uint8_t *f_pbData,
-        uint32_t f_cbData,
+        uint32_t  f_cdwSubSampleMapping,
         const uint32_t *f_pdwSubSampleMapping,
-        uint32_t f_cdwSubSampleMapping);
+        uint32_t  f_cbIV,
+        const uint8_t  *f_pbIV,
+        uint32_t  f_cbData,
+        const uint8_t  *f_pbData,
+        uint32_t *f_pcbOpaqueClearContent,
+        uint8_t **f_ppbOpaqueClearContent);
+
+    virtual CDMi_RESULT ReleaseClearContent(
+        const uint32_t  f_cbClearContentOpaque,
+        uint8_t  *f_pbClearContentOpaque );
 
     CDMi_RESULT Init(
         const IMediaKeySession *f_piMediaKeySession,

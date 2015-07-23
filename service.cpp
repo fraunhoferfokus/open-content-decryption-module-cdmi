@@ -40,15 +40,25 @@ extern "C" {
 using namespace CDMi;
 using namespace std;
 
+/* Compare operator for std::map */
+struct cmp_char
+{
+  bool operator()(char const *a, char const *b)
+    {
+      return strcmp(a, b) < 0;
+    }
+};
+
 IMediaKeys *g_pMediaKeys = NULL;
-map<wstring, IMediaKeySession*> g_mediaKeySessions;
+
+map<const char*, IMediaKeySession*, cmp_char> g_mediaKeySessions;
 
 // TODO(fhg): get rid of more globals
 vector<IMediaEngineSession *> g_mediaEngineSessions;
 char g_hostname[256];
 u_long g_pnum;  // program number for callback routine
 
-void doCallback(int, string, int, const wchar_t*);
+void doCallback(int, string, int, const char*);
 
 
 class CCallback : public IMediaKeySessionCallback {
@@ -67,8 +77,6 @@ class CCallback : public IMediaKeySessionCallback {
     uint32_t cbChallenge = 0;
     string message;
 
-    cout << "OnKeyMessage: Key message received." << endl;
-
     message = string(f_pszUrl) + "#SPLIT#" +
         string(reinterpret_cast<char*>(pbChallenge), cbChallenge);
 
@@ -82,34 +90,18 @@ class CCallback : public IMediaKeySessionCallback {
     doCallback(ON_READY, "", 0, m_mediaKeySession->GetSessionId());
   }
 
-  virtual void OnKeyError(CDMi_RESULT error) {
+  virtual void OnKeyError(int16_t f_nError, CDMi_RESULT error) {
     cout << "Key error is detected: " << error << endl;
     doCallback(ON_ERROR, "", error, m_mediaKeySession->GetSessionId());
   }
 
+  virtual void OnKeyStatusUpdate(const char* keyMessage) {
+    doCallback(ON_KEY_STATUS_UPDATE, keyMessage, 0, m_mediaKeySession->GetSessionId());
+ }
+
  private:
   IMediaKeySession *m_mediaKeySession;
 };
-
-void wcstoui16tp(uint16_t *dst, const wchar_t *sid) {
-  for (int i = 0; i < wcslen(sid); i++) {
-    dst[i] = sid[i];
-  }
-}
-
-wstring ui16tptowcs(uint16_t* src, uint16_t len) {
-  char *buffer = reinterpret_cast<char*>(malloc(sizeof(char) * (len + 1)));
-  std::wstring wc(len, L'#');
-
-  for (int i = 0; i < len; i++) {
-    buffer[i] = src[i];
-  }
-  buffer[len] = '\0';
-
-  mbstowcs(&wc[0], buffer, len + 1);
-  free(buffer);
-  return wc;
-}
 
 
 rpc_response_generic* rpc_open_cdm_is_type_supported_1_svc(
@@ -123,8 +115,8 @@ rpc_response_generic* rpc_open_cdm_is_type_supported_1_svc(
        << type->key_system.key_system_val << endl;
   if (g_pMediaKeys) {
     cr = g_pMediaKeys->IsTypeSupported(
-        reinterpret_cast<wchar_t *>(type->key_system.key_system_val),
-        reinterpret_cast<wchar_t *>(type->mime_type.mime_type_val));
+      reinterpret_cast<char *>(type->key_system.key_system_val),
+       reinterpret_cast<char *>(type->mime_type.mime_type_val));
   } else {
     cr = CDMi_S_FALSE;
   }
@@ -155,7 +147,7 @@ rpc_response_create_session* rpc_open_cdm_mediakeys_create_session_1_svc(
       reinterpret_cast<rpc_response_create_session*>(
       malloc(sizeof(rpc_response_create_session)));
   IMediaKeySessionCallback *callback = NULL;
-  uint16_t *dst;
+  char *dst;
 
   // callback_info for info on how to rpc callback into browser
   cout << "#open_cdm_mediakeys_create_session_1_svc: prog num: "
@@ -176,14 +168,13 @@ rpc_response_create_session* rpc_open_cdm_mediakeys_create_session_1_svc(
         &p_mediaKeySession);
 
     if (cr == CDMi_SUCCESS) {
-      const wchar_t *sid = p_mediaKeySession->GetSessionId();
+      const char *sid = p_mediaKeySession->GetSessionId();
+      uint32_t sid_size = strlen(sid);
       g_mediaKeySessions[sid] = p_mediaKeySession;
-
-      dst = reinterpret_cast<uint16_t*>(malloc(sizeof(uint16_t) * wcslen(sid)));
-      wcstoui16tp(dst, sid);
-
+      dst = reinterpret_cast<char*>(malloc(sizeof(char) * sid_size));
+      strcpy(dst, sid);
       response->session_id.session_id_val = dst;
-      response->session_id.session_id_len = wcslen(sid);
+      response->session_id.session_id_len = sid_size;
 
       cout << "#open_cdm_mediakeys_create_session_1_svc: creating new CCallbback" << endl;
       callback = new CCallback(p_mediaKeySession);
@@ -210,18 +201,16 @@ rpc_response_generic* rpc_open_cdm_mediakeysession_update_1_svc(
       malloc(sizeof(rpc_response_generic)));
   IMediaKeySession *p_mediaKeySession;
 
-  wstring sid = ui16tptowcs(params->session_id.session_id_val,
-      params->session_id.session_id_len);
-  p_mediaKeySession = g_mediaKeySessions[sid];
+  p_mediaKeySession = g_mediaKeySessions[params->session_id.session_id_val];
 
   if (p_mediaKeySession) {
-    wcout << "update for session id: " << sid << endl;
+    cout << "update for session id: " << params->session_id.session_id_val << endl;
     cout << "key: [" << params->key.key_val << "]" << endl;
     p_mediaKeySession->Update(params->key.key_val,
         params->key.key_len);
     cr = CDMi_SUCCESS;
   } else {
-    wcout << "no session found for session id: " << sid << endl;
+    cout << "no session found for session id: " << params->session_id.session_id_val<< endl;
     cr = CDMi_S_FALSE;
   }
 
@@ -239,13 +228,11 @@ rpc_response_generic* rpc_open_cdm_mediakeysession_release_1_svc(
 
   cout << "#open_cdm_mediakeysession_release_1_svc " << endl;
 
-  wstring sid = ui16tptowcs(params->session_id.session_id_val,
-      params->session_id.session_id_len);
-  p_mediaKeySession = g_mediaKeySessions[sid];
+  p_mediaKeySession = g_mediaKeySessions[params->session_id.session_id_val];
 
   if (p_mediaKeySession) {
     p_mediaKeySession->Close();
-    g_mediaKeySessions.erase(sid);
+    g_mediaKeySessions.erase(params->session_id.session_id_val);
     free(p_mediaKeySession);
     cr = CDMi_SUCCESS;
   } else {
@@ -319,12 +306,34 @@ void decryptShmem(int idxMES, int idXchngSem, int idXchngShMem) {
       uint8_t *mem_sample = (uint8_t *) MapSharedMemory(mesShmem->idSampleShMem);
 
       uint32_t *empty = new uint32_t[0];
-      cr = pMediaEngineSession->Decrypt(mem_iv,
+      uint32_t clear_content_size;
+      static uint8_t* clear_content = NULL;
+      /* FIXME: Releasing needs to be implemented using a separate
+       *  IPC call. Currently we assume that the previous decrypted clear
+       *  data is consumed when the Decrypt() called again.
+       */
+      if(clear_content)
+        pMediaEngineSession->ReleaseClearContent(clear_content_size, clear_content);
+
+      cr = pMediaEngineSession->Decrypt(
+          0,          //number of subsamples
+          empty,       //subsamples
           mesShmem->ivSize,
-          mem_sample,
+          mem_iv,
           mesShmem->sampleSize,
-          empty,
-          0);
+          mem_sample,
+          &clear_content_size,
+          &clear_content);
+
+      // FIXME: opencdm uses a single buffer for passing the
+      //  encrypted and decrypted buffer. Due to this we need an
+      //  additional memcpy
+      if(clear_content_size != mesShmem->sampleSize)
+        cout << "Warning: returned clear sample size " << clear_content_size <<
+          "differs from encrypted " <<
+          "buffer size"  << mesShmem->sampleSize << endl;
+
+      memcpy(mem_sample, clear_content, MIN(mesShmem->sampleSize, clear_content_size) );
 
       // detach all shared memories!
       DetachExistingSharedMemory(mem_iv);
@@ -349,15 +358,9 @@ rpc_response_generic* rpc_open_cdm_mediaengine_1_svc(
       << params->id_exchange_shmem << " "
       << params->id_exchange_sem << endl;
 
-  wstring sid = ui16tptowcs(params->session_id.session_id_val,
-      params->session_id.session_id_len);
-  p_mediaKeySession = g_mediaKeySessions[sid];
+  p_mediaKeySession = g_mediaKeySessions[params->session_id.session_id_val];
 
   cr = CreateMediaEngineSession(p_mediaKeySession,
-      NULL,
-      0,
-      NULL,
-      0,
       &pMediaEngineSession);
 
   if (cr == CDMi_SUCCESS) {
@@ -379,7 +382,7 @@ void doCallback(
     int eventType,
     string message = "",
     int error = 0,
-    const wchar_t *sid = NULL) {
+    const char *sid = NULL) {
   cout << "#doCallback" << endl;
   CLIENT *clnt;
 
@@ -398,14 +401,16 @@ void doCallback(
   char ** msg = (char**) &temp_message;
 
   int * argp = reinterpret_cast<int*>(&error);
-  uint16_t *dst =
-      reinterpret_cast<uint16_t*>(malloc(sizeof(uint16_t) * wcslen(sid)));
-  wcstoui16tp(dst, sid);
+
+  int sid_size = strlen(sid);
+
+  char *dst = new char[sid_size];
+  memcpy(dst, sid, sid_size);
 
   switch (eventType) {
     case ON_MESSAGE:
       rpc_cb_message km;
-      km.session_id.session_id_len = wcslen(sid);
+      km.session_id.session_id_len = sid_size;
       km.session_id.session_id_val = dst;
       km.destination_url = const_cast<char*>(temp_message);
       km.message = const_cast<char*>(temp_message);
@@ -414,18 +419,25 @@ void doCallback(
 
     case ON_READY:
       rpc_cb_ready kr;
-      kr.session_id.session_id_len = wcslen(sid);
+      kr.session_id.session_id_len = sid_size;
       kr.session_id.session_id_val = dst;
       on_ready_1(&kr, clnt);
       break;
 
     case ON_ERROR:
       rpc_cb_error ke;
-      ke.session_id.session_id_len = wcslen(sid);
+      ke.session_id.session_id_len = sid_size;
       ke.session_id.session_id_val = dst;
       on_error_1(&ke, clnt);
       break;
 
+    case ON_KEY_STATUS_UPDATE:
+      rpc_cb_key_status_update  msg;
+      msg.session_id.session_id_len = sid_size;
+      msg.session_id.session_id_val = dst;
+      msg.message = const_cast<char*>(temp_message);
+      on_key_status_update_1(&msg, clnt);
+      break;
     default:
       cerr << "doCallback: unknown eventType" << endl;
     }

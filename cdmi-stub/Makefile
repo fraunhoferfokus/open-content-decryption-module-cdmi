@@ -16,7 +16,7 @@
 
 CXXFLAGS = -g
 
-CDMI_SOURCES = mediakeysession.cpp mediakeys.cpp mediaenginesession.cpp 
+CDMI_SOURCES = mediakeysession.cpp mediakeys.cpp mediaenginesession.cpp  json_web_key.cpp
 CDMI_OBJECTS = $(CDMI_SOURCES:.cpp=.o)
 CDMI_INCLUDES = -I ../ -I ./jsmn/
 CDMILIB_NAME = cdmi
