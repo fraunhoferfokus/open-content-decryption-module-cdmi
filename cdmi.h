@@ -20,6 +20,16 @@
 namespace CDMi
 {
 
+// EME error code to which CDMi errors are mapped. Please
+// refer to the EME spec for details of the errors
+// https://dvcs.w3.org/hg/html-media/raw-file/tip/encrypted-media/encrypted-media.html
+#define MEDIA_KEYERR_UNKNOWN        1
+#define MEDIA_KEYERR_CLIENT         2
+#define MEDIA_KEYERR_SERVICE        3
+#define MEDIA_KEYERR_OUTPUT         4
+#define MEDIA_KEYERR_HARDWARECHANGE 5
+#define MEDIA_KEYERR_DOMAIN         6
+
 // The status code returned by CDMi APIs.
 typedef int32_t CDMi_RESULT;
 
@@ -29,11 +39,32 @@ typedef int32_t CDMi_RESULT;
 #define CDMi_E_FAIL             ((CDMi_RESULT)0x80004005)
 #define CDMi_E_INVALID_ARG      ((CDMi_RESULT)0x80070057)
 
+#define CDMi_E_SERVER_INTERNAL_ERROR    ((CDMi_RESULT)0x8004C600)
+#define CDMi_E_SERVER_INVALID_MESSAGE   ((CDMi_RESULT)0x8004C601)
+#define CDMi_E_SERVER_SERVICE_SPECIFIC  ((CDMi_RESULT)0x8004C604)
+
 // More CDMi status codes can be defined. In general
 // CDMi status codes should use the same PK error codes.
 
 #define CDMi_FAILED(Status)     ((CDMi_RESULT)(Status)<0)
 #define CDMi_SUCCEEDED(Status)  ((CDMi_RESULT)(Status) >= 0)
+
+#define ChkCDMi(expr) do {                                  \
+            cr = (expr);                                    \
+            if( CDMi_FAILED( cr ) )                         \
+            {                                               \
+                goto ErrorExit;                             \
+            }                                               \
+        } while(FALSE)
+
+/* Media Key status required by EME */
+#define  MEDIA_KEY_STATUS_USABLE 0
+#define  MEDIA_KEY_STATUS_INTERNAL_ERROR  1
+#define  MEDIA_KEY_STATUS_EXPIRED  2
+#define  MEDIA_KEY_STATUS_OUTPUT_NOT_ALLOWED  3
+#define  MEDIA_KEY_STATUS_OUTPUT_DOWNSCALED  4
+#define  MEDIA_KEY_STATUS_KEY_STATUS_PENDING  5
+#define  MEDIA_KEY_STATUS_KEY_STATUS_MAX  KEY_STATUS_PENDING
 
 // IMediaKeySessionCallback defines the callback interface to receive
 // events originated from MediaKeySession.
@@ -44,7 +75,7 @@ public:
 
     // Event fired when a key message is successfully created.
     virtual void OnKeyMessage(
-        const uint8_t *f_pbKeyMessage, //__in_bcount(f_cbKeyMessage) 
+        const uint8_t *f_pbKeyMessage, //__in_bcount(f_cbKeyMessage)
         uint32_t f_cbKeyMessage, //__in 
         char *f_pszUrl) = 0; //__in_z_opt 
 
@@ -53,7 +84,11 @@ public:
 
     // Event fired when MediaKeySession encounters an error.
     virtual void OnKeyError(
-        CDMi_RESULT f_error) = 0; //__in 
+        int16_t f_nError,
+        CDMi_RESULT f_crSysError) = 0;
+
+    //Event fired on key status update
+    virtual void OnKeyStatusUpdate(const char* keyMessage) = 0;
 };
 
 // IMediaKeySession defines the MediaKeySession interface.
@@ -77,10 +112,10 @@ public:
 
     // Return the session ID of the MediaKeySession. The returned pointer
     // is valid as long as the associated MediaKeySession still exists.
-    virtual const wchar_t *GetSessionId(void) const = 0;
+    virtual const char *GetSessionId(void) const = 0;
 
     // Return the key system of the MediaKeySession.
-    virtual const wchar_t *GetKeySystem(void) const = 0;
+    virtual const char *GetKeySystem(void) const = 0;
 };
 
 // IMediaKeys defines the MediaKeys interface.
@@ -92,21 +127,21 @@ public:
     // Check whether the MediaKey supports a specific mime type (optional)
     // and a key system.
     virtual bool IsTypeSupported(
-        const wchar_t *f_pwszMimeType, //__in_z_opt 
-        const wchar_t *f_pwszKeySystem) const = 0; //__in_z 
+        const char *f_pszMimeType,
+        const char *f_pszKeySystem) const = 0;
 
     // Create a MediaKeySession using the supplied init data and CDM data.
     virtual CDMi_RESULT CreateMediaKeySession(
-        const char *f_pwszMimeType, //__in_z_opt const wchar_t
-        const uint8_t *f_pbInitData, //__in_bcount_opt(cbInitData) 
-        uint32_t f_cbInitData, //__in 
-        const uint8_t *f_pbCDMData, //__in_bcount_opt(f_cbCDMData) 
-        uint32_t f_cbCDMData, //__in 
-        IMediaKeySession **f_ppiMediaKeySession) = 0; //__deref_out 
+        const char *f_pszMimeType,
+        const uint8_t *f_pbInitData,
+        uint32_t f_cbInitData,
+        const uint8_t *f_pbCDMData,
+        uint32_t f_cbCDMData,
+        IMediaKeySession **f_ppiMediaKeySession) = 0;
 
     // Destroy a MediaKeySession instance.
     virtual CDMi_RESULT DestroyMediaKeySession(
-        IMediaKeySession *f_piMediaKeySession) = 0; //__in 
+        IMediaKeySession *f_piMediaKeySession) = 0;
 };
 
 // Global factory method that creates a MediaKeys instance.
@@ -125,35 +160,39 @@ CDMi_RESULT DestroyMediaKeys(
 class IMediaEngineSession
 {
 public:
-    // Decrypt a buffer in-place and internally immediately re-encrypt it using a 
-    // session key. In other words the returned buffer can only be encrypted by
-    // a party that knows the session key.
+    virtual ~IMediaEngineSession(void) {}
+
+    // Decrypt a content buffer:
+    // The output can be a handle in some protected memory space usable by graphics 
+    // system, pointer to decrypted content or sample protected (encrypted) content; 
+    // in case of decrypted content it is assumed that the memory space being 
+    // operated in is secure from external activities and thus conforms 
+    // to the requirement of content being protected. Clear content has to be released 
+    // through ReleaseClearContent API. It is up to the implementer of the CDM to make 
+    // sure it satisfies all compliance and robustness rules.
     virtual CDMi_RESULT Decrypt(
-        const uint8_t *f_pbIV, //__in_bcount(f_cbIV) 
-        uint32_t f_cbIV, //__in 
-        uint8_t *f_pbData, //__inout_bcount(f_cbData) 
-        uint32_t f_cbData, //__in 
-        const uint32_t *f_pdwSubSampleMapping, // __in_ecount_opt(f_cdwSubSampleMapping)
-        uint32_t f_cdwSubSampleMapping) = 0; //__in 
+        uint32_t  f_cdwSubSampleMapping,
+        const uint32_t *f_pdwSubSampleMapping,
+        uint32_t  f_cbIV,
+        const uint8_t  *f_pbIV,
+        uint32_t  f_cbData,
+        const uint8_t  *f_pbData,
+        uint32_t *f_pcbOpaqueClearContent,
+        uint8_t **f_ppbOpaqueClearContent) = 0;
+
+    virtual CDMi_RESULT ReleaseClearContent(
+        const uint32_t  f_cbClearContentOpaque,
+        uint8_t  *f_pbClearContentOpaque ) = 0;
 };
 
 // Global factory method that creates a MediaEngineSession instance.
-// pbCert/cbCert is a sample protection certificate chain from a trusted authority.
-// After the certificate chain is validated a random session key is generated and then
-// encrypted using the public key extracted from the leaf certificate of the sample
-// protection certificate chain before sending back to the caller. The session key is
-// later used by media engine to decrypt samples that are re-encrypted by the call of
-// IMediaEngineSession::decrypt.
-//
-// Note: This interface below is at the prototype stage and it will undergo further design 
-// review to be finalized.
+// If the returned media engine session interface is not needed then it must be released
+// via the call of DestroyMediaEngineSession. 
+// if more information is necessary for instantiation of the class, 
+// the implementation of this method can be augmented.
 CDMi_RESULT CreateMediaEngineSession(
-    const IMediaKeySession *f_piMediaKeySession, //__in 
-    const uint8_t *f_pbCertChain, //__in_bcount(f_cbCertChain)
-    uint32_t f_cbCertChain, //__in 
-    uint8_t **f_ppbEncryptedSessionKey, //__deref_out_bcount(*f_pcbSessionKey) 
-    uint32_t *f_pcbEncryptedSessionKey, //__out 
-    IMediaEngineSession **f_ppiMediaEngineSession); //__deref_out 
+    IMediaKeySession     *f_piMediaKeySession,
+    IMediaEngineSession **f_ppiMediaEngineSession);
 
 // Global method that destroys a MediaEngineSession instance.
 CDMi_RESULT DestroyMediaEngineSession(

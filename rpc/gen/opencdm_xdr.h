@@ -60,7 +60,7 @@ typedef struct rpc_request_create_session rpc_request_create_session;
 struct rpc_request_load_session {
 	struct {
 		u_int session_id_len;
-		uint16_t *session_id_val;
+		char *session_id_val;
 	} session_id;
 };
 typedef struct rpc_request_load_session rpc_request_load_session;
@@ -68,7 +68,7 @@ typedef struct rpc_request_load_session rpc_request_load_session;
 struct rpc_request_session_update {
 	struct {
 		u_int session_id_len;
-		uint16_t *session_id_val;
+		char *session_id_val;
 	} session_id;
 	struct {
 		u_int key_len;
@@ -80,7 +80,7 @@ typedef struct rpc_request_session_update rpc_request_session_update;
 struct rpc_request_session_release {
 	struct {
 		u_int session_id_len;
-		uint16_t *session_id_val;
+		char *session_id_val;
 	} session_id;
 };
 typedef struct rpc_request_session_release rpc_request_session_release;
@@ -88,7 +88,7 @@ typedef struct rpc_request_session_release rpc_request_session_release;
 struct rpc_request_mediaengine_data {
 	struct {
 		u_int session_id_len;
-		uint16_t *session_id_val;
+		char *session_id_val;
 	} session_id;
 	struct {
 		u_int auth_data_len;
@@ -108,7 +108,7 @@ struct rpc_response_create_session {
 	int platform_val;
 	struct {
 		u_int session_id_len;
-		uint16_t *session_id_val;
+		char *session_id_val;
 	} session_id;
 };
 typedef struct rpc_response_create_session rpc_response_create_session;

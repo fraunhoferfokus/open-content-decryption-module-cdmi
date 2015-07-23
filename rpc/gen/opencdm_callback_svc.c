@@ -23,6 +23,7 @@ open_cdm_callback_1(struct svc_req *rqstp, register SVCXPRT *transp)
 		rpc_cb_message on_message_1_arg;
 		rpc_cb_ready on_ready_1_arg;
 		rpc_cb_error on_error_1_arg;
+		rpc_cb_key_status_update on_key_status_update_1_arg;
 	} argument;
 	char *result;
 	xdrproc_t _xdr_argument, _xdr_result;
@@ -49,6 +50,12 @@ open_cdm_callback_1(struct svc_req *rqstp, register SVCXPRT *transp)
 		_xdr_argument = (xdrproc_t) xdr_rpc_cb_error;
 		_xdr_result = (xdrproc_t) xdr_void;
 		local = (char *(*)(char *, struct svc_req *)) on_error_1_svc;
+		break;
+
+	case ON_KEY_STATUS_UPDATE:
+		_xdr_argument = (xdrproc_t) xdr_rpc_cb_key_status_update;
+		_xdr_result = (xdrproc_t) xdr_void;
+		local = (char *(*)(char *, struct svc_req *)) on_key_status_update_1_svc;
 		break;
 
 	default:

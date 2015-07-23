@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-#include <wchar.h>
 
 #include <iostream>
 #include <sstream>
-#include <string>
+#include <string.h>
 
 #include "imp.h"
 
@@ -33,25 +32,24 @@ CMediaKeys::CMediaKeys() {}
 CMediaKeys::~CMediaKeys(void) {}
 
 bool CMediaKeys::IsTypeSupported(
-    const wchar_t *f_pwszMimeType,
-    const wchar_t *f_pwszKeySystem) const {
+    const char *f_pwszMimeType,
+    const char *f_pwszKeySystem) const {
   bool isSupported = true;
 }
 
-const wchar_t * CMediaKeys::CreateSessionId() {
-  wstringstream wsstream;
-  const wchar_t *tmp;
+const char * CMediaKeys::CreateSessionId() {
+  const char *tmp;
+  stringstream strs;
+  strs << s_sessionCnt;
+  string tmp_str = strs.str();
+  tmp = tmp_str.c_str();
 
-  wsstream << s_sessionCnt;
-  tmp = wsstream.str().c_str();
-
-  const size_t size = wcslen(tmp);
-  wchar_t *buffer = new wchar_t[size + 1];
-  wcsncpy(buffer, tmp, size + 1);
+  char *buffer = new char[tmp_str.length()]();
+  strcpy(buffer, tmp);
 
   s_sessionCnt += 1;
 
-  return const_cast<const wchar_t*>(buffer);
+  return const_cast<char*>(buffer);
 }
 
 CDMi_RESULT CMediaKeys::CreateMediaKeySession(

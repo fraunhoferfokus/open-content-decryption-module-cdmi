@@ -14,26 +14,27 @@
 # limitations under the License.
 #
 
+
 CXXFLAGS = -g
 
-CDMI_DIR = cdmi-stub
-CDMI_SOURCES = $(CDMI_DIR)/mediakeysession.cpp $(CDMI_DIR)/mediakeys.cpp $(CDMI_DIR)/mediaenginesession.cpp
-CDMI_OBJECTS = $(CDMI_SOURCES:.cpp=.o)
-CDMI_INCLUDES = -I .
-CDMILIB_NAME = cdmi
-
 RPC_DIR = rpc
-RPC_SOURCES = $(RPC_DIR)/gen/opencdm_xdr_xdr.c $(RPC_DIR)/gen/opencdm_xdr_svc.c $(RPC_DIR)/gen/opencdm_callback_xdr.c $(RPC_DIR)/gen/opencdm_callback_clnt.c 
+
+RPC_SOURCES = \
+      $(RPC_DIR)/gen/opencdm_xdr_xdr.c\
+      $(RPC_DIR)/gen/opencdm_xdr_svc.c \
+      $(RPC_DIR)/gen/opencdm_callback_xdr.c \
+      $(RPC_DIR)/gen/opencdm_callback_clnt.c 
+
 RPC_OBJECTS = $(RPC_SOURCES:.c=.o)
 RPC_INCLUDES = -I $(RPC_DIR)/gen
 
 SERVICE_SOURCES = service.cpp libs/shmemsem/shmemsem_helper.cpp
-SERVICE_INCLUDES = -I $(CDMI_DIR) $(RPC_INCLUDES)
-SERVICE_LIBS = -l$(CDMILIB_NAME) -lrt
+SERVICE_INCLUDES =  $(RPC_INCLUDES)
+SERVICE_LIBS = -lrt $(JSMN_LIBS)  $
 
-.PHONY: clean
+.PHONY: clean cdmiservice
 
-all: cdmi rpc service
+all:  cdmi cdmiservice
 
 .c.o:
 	$(CXX) $(CXXFLAGS) $(RPC_INCLUDES) -c $< -o $@
@@ -41,18 +42,20 @@ all: cdmi rpc service
 .cpp.o:
 	$(CXX) $(CXXFLAGS) $(CDMI_INCLUDES) -c $< -o $@
 
-cdmi: $(CDMI_OBJECTS)
-	$(AR) rcs lib$(CDMILIB_NAME).a $^
 
 rpc: $(RPC_OBJECTS)
 
-service: $(RPC_OBJECTS)
+cdmiservice: $(RPC_OBJECTS)
 	$(CXX) $(CXXFLAGS) -pthread -std=c++0x \
 		$(CDMI_INCLUDES) $(SERVICE_INCLUDES) -L . \
-		-o $@ $(SERVICE_SOURCES) $^ $(SERVICE_LIBS)
+		-o $@ $(SERVICE_SOURCES) $^ $(SERVICE_LIBS) $(CDMI_LFLAGSS)
 
-clean:
-	rm $(CDMI_OBJECTS)
-	rm $(RPC_OBJECTS)
-	rm lib$(CDMILIB_NAME).a
-	rm service
+clean: clean_cdmi
+	rm -f $(RPC_OBJECTS)
+	rm -f service
+
+ifndef CDMI_MAKE_CONFIG
+include  config_clearkey.mk
+else
+include $(CDMI_MAKE_CONFIG)
+endif
